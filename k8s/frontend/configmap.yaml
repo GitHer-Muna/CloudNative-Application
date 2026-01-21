@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: frontend-config
+  namespace: inventory-system
+data:
+  REACT_APP_API_URL: "/api"

@@ -1,0 +1,204 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-initdb
+  namespace: inventory-system
+data:
+  01-schema.sql: |
+    -- Database Schema for Inventory Management System
+    CREATE DATABASE IF NOT EXISTS inventory_db CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    USE inventory_db;
+
+    CREATE TABLE IF NOT EXISTS categories (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL UNIQUE,
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS products (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        description TEXT,
+        sku VARCHAR(50) NOT NULL UNIQUE,
+        category_id INT,
+        unit_price DECIMAL(10, 2) NOT NULL DEFAULT 0.00,
+        reorder_level INT NOT NULL DEFAULT 10,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE SET NULL,
+        INDEX idx_sku (sku),
+        INDEX idx_category (category_id),
+        INDEX idx_name (name)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS warehouses (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(100) NOT NULL,
+        location VARCHAR(255) NOT NULL,
+        capacity INT NOT NULL DEFAULT 0,
+        manager_name VARCHAR(100),
+        contact_email VARCHAR(100),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_name (name)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS product_inventory (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        warehouse_id INT NOT NULL,
+        quantity INT NOT NULL DEFAULT 0,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,
+        UNIQUE KEY unique_product_warehouse (product_id, warehouse_id),
+        INDEX idx_product (product_id),
+        INDEX idx_warehouse (warehouse_id)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        email VARCHAR(100) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        role ENUM('admin', 'manager', 'staff') NOT NULL DEFAULT 'staff',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        INDEX idx_username (username),
+        INDEX idx_email (email)
+    ) ENGINE=InnoDB;
+
+    CREATE TABLE IF NOT EXISTS inventory_transactions (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        product_id INT NOT NULL,
+        warehouse_id INT NOT NULL,
+        transaction_type ENUM('in', 'out', 'adjustment') NOT NULL,
+        quantity INT NOT NULL,
+        transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        user_id INT,
+        notes TEXT,
+        FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+        FOREIGN KEY (warehouse_id) REFERENCES warehouses(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_product (product_id),
+        INDEX idx_warehouse (warehouse_id),
+        INDEX idx_date (transaction_date)
+    ) ENGINE=InnoDB;
+
+  02-seed-data.sql: |
+    USE inventory_db;
+
+    INSERT INTO categories (name, description) VALUES
+    ('Electronics', 'Electronic devices and accessories'),
+    ('Furniture', 'Office and home furniture'),
+    ('Stationery', 'Office supplies and stationery items'),
+    ('Hardware', 'Tools and hardware supplies'),
+    ('Software', 'Software licenses and digital products');
+
+    INSERT INTO warehouses (name, location, capacity, manager_name, contact_email) VALUES
+    ('Main Warehouse', '123 Industrial Blvd, New York, NY 10001', 10000, 'John Smith', 'john.smith@inventory.com'),
+    ('West Coast Hub', '456 Logistics Ave, Los Angeles, CA 90001', 8000, 'Sarah Johnson', 'sarah.johnson@inventory.com'),
+    ('East Coast Hub', '789 Distribution Dr, Boston, MA 02101', 7500, 'Michael Brown', 'michael.brown@inventory.com');
+
+    INSERT INTO products (name, description, sku, category_id, unit_price, reorder_level) VALUES
+    ('Laptop Dell XPS 15', '15-inch high-performance laptop', 'ELEC-LAP-001', 1, 1299.99, 10),
+    ('Wireless Mouse Logitech', 'Ergonomic wireless mouse', 'ELEC-MOU-001', 1, 29.99, 50),
+    ('Office Desk Oak Wood', 'Solid oak office desk 60x30', 'FURN-DSK-001', 2, 399.99, 5),
+    ('Ergonomic Office Chair', 'Adjustable ergonomic chair with lumbar support', 'FURN-CHR-001', 2, 249.99, 15),
+    ('A4 Printer Paper Box', 'Box of 5000 sheets A4 paper', 'STAT-PAP-001', 3, 45.99, 20),
+    ('Blue Ballpoint Pens', 'Pack of 50 blue pens', 'STAT-PEN-001', 3, 12.99, 100),
+    ('Cordless Drill Kit', 'Professional cordless drill with accessories', 'HARD-DRL-001', 4, 159.99, 8),
+    ('Hammer Set', 'Set of 3 hammers various sizes', 'HARD-HAM-001', 4, 34.99, 25),
+    ('Microsoft Office 365', 'Annual subscription license', 'SOFT-OFF-001', 5, 99.99, 0),
+    ('Adobe Creative Suite', 'Creative Cloud annual license', 'SOFT-ADB-001', 5, 599.99, 0);
+
+    INSERT INTO product_inventory (product_id, warehouse_id, quantity) VALUES
+    (1, 1, 25), (2, 1, 150), (3, 1, 12), (4, 1, 30), (5, 1, 45),
+    (6, 1, 200), (7, 1, 18), (8, 1, 40),
+    (1, 2, 18), (2, 2, 120), (3, 2, 8), (4, 2, 22), (5, 2, 35),
+    (6, 2, 180), (7, 2, 15), (8, 2, 32),
+    (1, 3, 15), (2, 3, 95), (3, 3, 6), (4, 3, 18), (5, 3, 28),
+    (6, 3, 150), (7, 3, 12), (8, 3, 28);
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql
+  namespace: inventory-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mysql
+  template:
+    metadata:
+      labels:
+        app: mysql
+    spec:
+      containers:
+      - name: mysql
+        image: mysql:8.0
+        env:
+        - name: MYSQL_ROOT_PASSWORD
+          value: "rootpassword123"
+        - name: MYSQL_DATABASE
+          value: "inventory_db"
+        - name: MYSQL_USER
+          value: "inventory_user"
+        - name: MYSQL_PASSWORD
+          value: "inventory_pass"
+        ports:
+        - containerPort: 3306
+          name: mysql
+        volumeMounts:
+        - name: mysql-storage
+          mountPath: /var/lib/mysql
+        - name: mysql-initdb
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mysqladmin
+            - ping
+            - -h
+            - localhost
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: mysql-storage
+        emptyDir: {}
+      - name: mysql-initdb
+        configMap:
+          name: mysql-initdb
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mysql
+  namespace: inventory-system
+spec:
+  ports:
+  - port: 3306
+    targetPort: 3306
+  selector:
+    app: mysql
+  type: ClusterIP
